@@ -1,1 +1,0 @@
-# k8s 환경에 SpringBoot 어플리케이션 CI/CD 적용

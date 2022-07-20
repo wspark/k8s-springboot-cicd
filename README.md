@@ -1,13 +1,13 @@
-# k8s 환경에서 Prometheus 기반 모니터링 환경구성
+# k8s 환경에서 SpringBoot 기반 어플리케이션 배포
 
 ## k8s 시스템 구성
 
 | Component       | 용도              |          버전 |
 | :----------     | :---------------: | :-----------: |
-| [Kubernetes](https://github.com/wspark/k8s-sample-app/tree/main/k8s)      | 인프라/서비스 배포 |    v1.24      |
-| [Grafana](https://github.com/wspark/k8s-sample-app/tree/main/grafana)         |   모니터링 대쉬보드|   V8.5.3      |
-| [Prometheus](https://github.com/wspark/k8s-sample-app/tree/main/prometheus)    |   데이터 수집      |    2.x        |
-| [Tekton pipeline](https://github.com/wspark/k8s-sample-app/tree/main/tekton) |    CI/CD 구현     |      v0.27.0   |
+| [Kubernetes](https://github.com/wspark/k8s-springboot-cicd/tree/main/k8s)      | 인프라/서비스 배포 |    v1.24      |
+| [Grafana](https://github.com/wspark/k8s-springboot-cicd/tree/main/grafana)         |   모니터링 대쉬보드|   V8.5.3      |
+| [Prometheus](https://github.com/wspark/k8s-springboot-cicd/tree/main/prometheus)    |   데이터 수집      |    2.x        |
+| [Tekton pipeline](https://github.com/wspark/k8s-springboot-cicd/tree/main/tekton) |    CI/CD 구현     |      v0.27.0   |
 
 ## 기타시스템 구성
 
