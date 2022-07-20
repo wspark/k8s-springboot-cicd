@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Service
+metadata:  
+  labels:
+    app: springboot-demo
+  name: springboot-demo
+  namespace: wspark  
+spec:
+  externalTrafficPolicy: Cluster
+  internalTrafficPolicy: Cluster
+  ipFamilies:
+  - IPv4
+  ipFamilyPolicy: SingleStack
+  ports:
+  - nodePort: 31236
+    port: 8080
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    app: springboot-demo
+  sessionAffinity: None
+  type: NodePort
