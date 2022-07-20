@@ -62,6 +62,8 @@ tekton-pipelines-webhook      ClusterIP   10.104.237.72   <none>        9090/TCP
 kubectl create -f https://raw.githubusercontent.com/tektoncd/catalog/main/task/git-clone/0.6/git-clone.yaml -n tekton-pipelines
 # maven task
 kubectl create -f https://raw.githubusercontent.com/tektoncd/catalog/main/task/maven/0.2/maven.yaml -n tekton-pipelines
+# gradle task
+kubectl create -f  https://raw.githubusercontent.com/tektoncd/catalog/main/task/gradle/0.1/gradle.yaml -n tekton-pipelines
 # buildah task(image build)
 kubectl create -f https://raw.githubusercontent.com/tektoncd/catalog/main/task/buildah/0.3/buildah.yaml -n tekton-pipelines
 # deploy task(kubectl commander)
@@ -91,49 +93,43 @@ tar xvzf tkn_0.24.0_Linux_x86_64.tar.gz -C /usr/local/bin/ tkn
 tekton ci/cd 구성에 필요한 task를 수행순서에 따라 pipeline을 생성하여 git-clone -> maven -> 이미지 빌드/푸시(dockerhub) -> deploy(k8s deploy)순으로 작성
 
 ```text
-# pipeline 생성
-kubectl create -f pipeline.yaml -n tekton-pipelines
+# pipeline 생성(maven,gradle)
+kubectl create -f pipeline-[maven,gradle].yaml -n tekton-pipelines
 ```
 
 ```text
 apiVersion: tekton.dev/v1beta1
 kind: Pipeline
 metadata:
-  generation: 5
-  name: tekton-pipeline-demo
+  name: tekton-pipeline-gradle-demo
 spec:
   tasks:
     - name: git-clone
       params:
         - name: url
-          value: 'https://github.com/wspark/k8s-sample-app'
+          value: 'https://github.com/wspark/k8s-springboot-cicd'
       taskRef:
         kind: Task
         name: git-clone
       workspaces:
         - name: output
           workspace: pipeline-shared-data
-    - name: maven
+    - name: gradle
       params:
-        - name: CONTEXT_DIR
+        - name: PROJECT_DIR
           value: "springboot-sample"
-        - name: GOALS
-          value:
-            - package 
       runAfter:
         - git-clone
       taskRef:
         kind: Task
-        name: maven
+        name: gradle
       workspaces:
         - name: source
-          workspace: pipeline-shared-data
-        - name: maven-settings
           workspace: pipeline-shared-data
     - name: buildah
       params:
         - name: IMAGE
-          value: docker.io/wspark83/springboot:demo-v1.3
+          value: docker.io/wspark83/springboot:demo-v1.5
         - name: STORAGE_DRIVER
           value: overlay
         - name: DOCKERFILE
@@ -147,7 +143,7 @@ spec:
         - name: SKIP_PUSH
           value: 'false'
       runAfter:
-        - maven
+        - gradle
       taskRef:
         kind: Task
         name: buildah
@@ -159,7 +155,7 @@ spec:
     - name: kubenetes-deploy
       params:
         - name: script
-          value: "kubectl set image deployment/springboot-demo springboot=docker.io/wspark83/springboot:demo-v1.3 -n wspark"
+          value: "kubectl set image deployment/springboot-demo springboot=docker.io/wspark83/springboot:demo-v1.5 -n wspark"
       runAfter:
         - buildah
       taskRef:
@@ -170,7 +166,6 @@ spec:
           workspace:  pipeline-shared-data
   workspaces:
     - name: pipeline-shared-data
-
 ```
 
 * git-clone task
@@ -185,6 +180,11 @@ params.GOALS : maven 수행시 수행되는 파라미터
 params.CONTEXT: pom 파일위치
 Ex)params.GOALS: package
 Ex)params.CONTEXT: springboot-sample
+```
+* gradle task
+```text
+params.PROJECT_DIR : build.gradle 위치
+Ex)params.PROJECT_DIR: springboot-sample
 ```
 
 * buildah task 
@@ -207,10 +207,10 @@ Ex) params.script: kubectl set image deployment/springboot-demo springboot=docke
 * tkn cli로 pipeline 수행시 pipeline 이름/workspace/claimeName을 파라미터로 실행함
 ```text
 # pipeline 수행
-tkn pipeline start tekton-pipeline-demo  --workspace name=pipeline-shared-data,claimName=tekton -n tekton-pipelines
-PipelineRun started: tekton-pipeline-demo-run-sjl4g
+tkn pipeline start tekton-pipeline-gradle-demo  --workspace name=pipeline-shared-data,claimName=tekton -n tekton-pipelines
+PipelineRun started: tekton-pipeline-gradle-demo-run-4hsnm
 # pipelinelog 확인
-tkn pipelinerun logs tekton-pipeline-demo-run-sjl4g -f -n tekton-pipelines 
+tkn pipelinerun logs tekton-pipeline-gradle-demo-run-4hsnm -f -n tekton-pipelines
 
 ```
 
