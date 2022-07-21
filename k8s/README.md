@@ -166,6 +166,6 @@ wspark-kube-worker02   Ready     4d
 
 ```
 
-## TO-DO list
+## Reference 참고 링크
 * [kubernetes install](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/)
 * [install blog](https://computingforgeeks.com/install-kubernetes-cluster-on-centos-with-kubeadm/)

@@ -44,13 +44,13 @@ import io.micrometer.core.annotation.Timed;
 * springboot 소스 빌드
 ```text
 # springboot pom.xml경로에서 maven 빌드
-./mvnw pacakge
+gradle build
 ```
 * Dockerfile
 ```text
 # 소스를 내부 컨테이너에 복사하여 java로 기동
 FROM wspark83/springboot:openjdk8
-ARG JAR_FILE=target/springboot-0.0.1-SNAPSHOT.jar
+ARG JAR_FILE=build/libs/springboot-sample-0.0.1-SNAPSHOT.jar
 
 COPY ${JAR_FILE} app.jar
 
