@@ -18,7 +18,7 @@ public class SpringbootApplication {
     @ResponseBody
     public String sampleHome() {
         
-        return "SpringBoot Sampe! v1.7";     
+        return "SpringBoot Sampe! v1.8";     
 	}
 
 }
