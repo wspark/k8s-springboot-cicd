@@ -16,7 +16,7 @@ ARG JAR_FILE=build/libs/springboot-sample-0.0.1-SNAPSHOT.jar
 COPY ${JAR_FILE} /app.jar
 
 RUN chown jboss:root /logs
-RUN chmod jboss:root /app.jar
+RUN chown jboss:root /app.jar
 
 EXPOSE 8080
 
