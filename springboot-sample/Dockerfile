@@ -18,6 +18,9 @@ COPY ${JAR_FILE} /app.jar
 RUN chown jboss:root /logs
 RUN chown jboss:root /app.jar
 
+# jboss user
+USER 185
+
 EXPOSE 8080
 
 ENTRYPOINT ["java","-jar","/app.jar"]

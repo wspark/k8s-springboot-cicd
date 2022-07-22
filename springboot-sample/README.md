@@ -43,16 +43,37 @@ import io.micrometer.core.annotation.Timed;
 
 * springboot 소스 빌드
 ```text
-# springboot pom.xml경로에서 maven 빌드
+# springboot pom.xml경로에서 gradle 빌드
 gradle build
+
 ```
 * Dockerfile
 ```text
-# 소스를 내부 컨테이너에 복사하여 java로 기동
-FROM wspark83/springboot:openjdk8
-ARG JAR_FILE=build/libs/springboot-sample-0.0.1-SNAPSHOT.jar
+## 소스를 내부 컨테이너에 복사하여 java로 기동
+FROM wspark83/springboot:openjdk8-custom
 
-COPY ${JAR_FILE} app.jar
+# maintainer
+LABEL maintainer="jjomacson@gmail.com"
+# timezone setting
+ENV TZ=Asia/Seoul
+# root user
+USER root
+# for application log
+RUN mkdir -p /logs
+# gradle
+ARG JAR_FILE=build/libs/springboot-sample-0.0.1-SNAPSHOT.jar
+# maven
+#ARG JAR_FILE=target/springboot-sample-0.0.1-SNAPSHOT.jar
+
+COPY ${JAR_FILE} /app.jar
+
+RUN chown jboss:root /logs
+RUN chown jboss:root /app.jar
+
+# jboss user
+USER 185
+
+EXPOSE 8080
 
 ENTRYPOINT ["java","-jar","/app.jar"]
 ```
@@ -104,6 +125,8 @@ springboot-demo   NodePort   10.101.65.210   <none>        8080:31236/TCP   2d1h
 curl 10.65.41.81:31236/api/library/author
 [{"id":1,"firstName":"Wspark","lastName":"Ko"},{"id":2,"firstName":"KimTaeHee","lastName":"Ko"},{"id":3,"firstName":"parkwonseok","lastName":"Ko"}]
 ```
+
+
 
 ## API 확인
 
