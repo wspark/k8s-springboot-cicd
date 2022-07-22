@@ -43,10 +43,12 @@ import io.micrometer.core.annotation.Timed;
 
 * springboot 소스 빌드
 ```text
-# springboot pom.xml경로에서 gradle 빌드
+# springboot-sample 경로에서 gradle 빌드
 gradle build
-
+# target 경로에 jar파일 생성
+./build/libs/springboot-sample-0.0.1-SNAPSHOT.jar
 ```
+
 * Dockerfile
 ```text
 ## 소스를 내부 컨테이너에 복사하여 java로 기동
@@ -124,23 +126,110 @@ springboot-demo   NodePort   10.101.65.210   <none>        8080:31236/TCP   2d1h
 # 호출
 curl 10.65.41.81:31236/api/library/author
 [{"id":1,"firstName":"Wspark","lastName":"Ko"},{"id":2,"firstName":"KimTaeHee","lastName":"Ko"},{"id":3,"firstName":"parkwonseok","lastName":"Ko"}]
+
+
+# PV/PVC 생성
+kubectl create -f springboot-demo-pv.yaml
+kubectl create -f springboot-demo-pvc.yaml
+
+# deployment에 volume 추가(/logs 디렉토리에 springboot-demo-pvc 연결)
+kubectl edit deploy springboot-sample -n wspark
+
+    spec:
+      containers:
+      - image: docker.io/wspark83/springboot:demo-v1.8
+        imagePullPolicy: IfNotPresent
+        name: springboot
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /logs
+          name: springboot-demo-pvc
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: springboot-demo-pvc
+        persistentVolumeClaim:
+          claimName: springboot-demo-pvc
+
+
+# pod에서 pvc 확인
+# pod name 확인 및 pod 내부진입
+kubectl get pods -n wspark
+NAME                               READY   STATUS    RESTARTS   AGE
+springboot-demo-6bd844df67-99bj2   1/1     Running   0          12m
+springboot-demo-6bd844df67-xhjp7   1/1     Running   0          12m
+kubectl exec -ti springboot-demo-6bd844df67-99bj2 /bin/bash -n wspark
+
+# pod 내에서 볼륨정보 추가확인(/logs)
+df -h
+Filesystem                                      Size  Used Avail Use% Mounted on
+overlay                                          32G   12G   20G  37% /
+tmpfs                                            64M     0   64M   0% /dev
+tmpfs                                           3.9G     0  3.9G   0% /sys/fs/cgroup
+shm                                              64M     0   64M   0% /dev/shm
+tmpfs                                           3.9G  410M  3.5G  11% /etc/hostname
+10.65.41.80:/data/nfs/wspark/springboot-sample  100G  2.0G   99G   2% /logs
+/dev/mapper/centos-root                          32G   12G   20G  37% /etc/hosts
+tmpfs                                           7.7G   12K  7.7G   1% /run/secrets/kubernetes.io/serviceaccount
+tmpfs                                           3.9G     0  3.9G   0% /proc/acpi
+tmpfs                                           3.9G     0  3.9G   0% /proc/scsi
+tmpfs                                           3.9G     0  3.9G   0% /sys/firmware
+
 ```
 
+### autoscale 설정
+```
+# hpa 설정
+kubectl create -f hpa.yaml -n wspark
+horizontalpodautoscaler.autoscaling/hpa created
+kubectl get hpa -n wspark
+NAME   REFERENCE                    TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
+hpa    Deployment/springboot-demo   1%/60%    1         3         3          21s
 
+# project limits 추가
+kubectl create -f limits.yaml -n wspark
+limitrange/limit-range created
+kubectl get limits -n wspark
+NAME          CREATED AT
+limit-range   2022-07-22T02:33:57Z
 
-## API 확인
+# project quota 추가
+kubectl create -f quota.yaml -n wspark
+resourcequota/quota created
+kubectl get quota -n wspark
+NAME    AGE   REQUEST                                            LIMIT
+quota   9s    requests.cpu: 600m/4, requests.memory: 768Mi/4Gi   limits.cpu: 6/8, limits.memory: 1536Mi/8Gi
 
-* Author 추가
-<img src="./images/spring-api-post.jpg" align="center" />
+# deployment 에 resources 제한
+kubectl edit deploy -n wspark
+     containers:
+      - image: docker.io/wspark83/springboot:demo-v1.8
+        imagePullPolicy: IfNotPresent
+        name: springboot-demo
+        resources:
+          limits:
+            cpu: "2"
+          requests:
+            cpu: 200m
 
-* Author 리스트 확인
-<img src="./images/spring-api-get.jpg" align="center" />
+# 서비스에 부하주기
+ab -n 1000 -c 1000 http://10.65.41.81:31236/api/library/book
 
+# 부하시 hpa개수 max까지 증가
+ kubectl get hpa -n wspark
+NAME   REFERENCE                    TARGETS    MINPODS   MAXPODS   REPLICAS   AGE
+hpa    Deployment/springboot-demo   424%/60%   1         3         3          7m4s
+[root@wspark-kube-mas01 ~]# 
 
-
+```
 
 ## Reference 참고 링크
 * [start.spring.io](https://start.spring.io/)
 * [javatodev](https://javatodev.com/spring-boot-mysql)
 * [velog.io](https://velog.io/@windsekirun/Spring-Boot-Actuator-Micrometer%EB%A1%9C-Prometheus-%EC%97%B0%EB%8F%99%ED%95%98%EA%B8%B0)
-
+* [kubernetes autoscale](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale-walkthrough/#autoscaling-on-more-specific-metrics)
