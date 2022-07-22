@@ -1,171 +1,128 @@
-# kubernetes 구성
 
-## 구성 현황 ###
+# k8s 환경에서 컨테이너 배포
 
-* k8s 관리를 위한 Bastion 서버를 추가생성
+## 기본 프로젝트 생성 및 deployment 생성
 
-| OS Verison   | IP             | Server Type    | HostName               |     Spect       |
-| :----------  | :----------:    | :----------    | :--------------------: | :-------------: |
-| CentOS 7.9    | 10.65.40.80    | Management     | wspark-kube-bastion    | 2vcpus, 8G Ram |
-| CentOS 7.9    | 10.65.40.81    | Master         | wspark-kube-mas01      | 2vcpus, 4G Ram |
-| CentOS 7.9    | 10.65.40.84    | Worker         | wspark-kube-worker01   | 2vcpus, 8G Ram |
-| CentOS 7.9    | 10.65.40.85    | Worker         | wspark-kube-worker02   | 2vcpus, 8G Ram |
-
-## All Nodes 
-### OS update and reboot
 ```text
-yum -y update && sudo systemctl reboot
-```
+# namespace 생성
+kubectl create namespace wspark
 
-###  kubernetes repo 준비
-```text
-sudo tee /etc/yum.repos.d/kubernetes.repo<<EOF
-[kubernetes]
-name=Kubernetes
-baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
-enabled=1
-gpgcheck=1
-repo_gpgcheck=1
-gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
-EOF
-```
-### kubernetes 설치
-```text
-yum clean all && sudo yum -y makecache
-yum -y install epel-release vim git curl wget kubelet kubeadm kubectl --disableexcludes=kubernetes
-```
-### firewalld 비활성화
-* 테스으 환경으로 firewalld 비활성화
-```text
-systemctl disable --now firewalld
-```
-### selinux & swap 비활성
-```text
-setenforce 0
-sed -i 's/^SELINUX=.*/SELINUX=permissive/g' /etc/selinux/config
+# deployment 생성
+kubectl create deployment springboot-demo --image docker.io/wspark83/springboot:demo-v1.0  -n wspark
 
-sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
-swapoff -a
-```
+# 외부접속용 svc nodeport 변경
+kubectl expose deployment springboot-demo --port 8080 --target-port 8080 --type NodePort -n wspark
 
-### sysctl 수정
-```text
-modprobe overlay
-modprobe br_netfilter
+# nodeport 확인
+kubectl get svc -n wspark
+NAME              TYPE       CLUSTER-IP      EXTERNAL-IP   PORT(S)          AGE
+springboot-demo   NodePort   10.101.65.210   <none>        8080:31236/TCP   2d1h
 
-sudo tee /etc/sysctl.d/kubernetes.conf<<EOF
-net.bridge.bridge-nf-call-ip6tables = 1
-net.bridge.bridge-nf-call-iptables = 1
-net.ipv4.ip_forward = 1
-net.ipv6.conf.all.disable_ipv6=0
-net.ipv6.conf.default.disable_ipv6=0
-net.ipv6.conf.tun0.disable_ipv6=0
-EOF
+# 호출
+curl 10.65.41.81:31236/api/library/author
+[{"id":1,"firstName":"Wspark","lastName":"Ko"},{"id":2,"firstName":"KimTaeHee","lastName":"Ko"},{"id":3,"firstName":"parkwonseok","lastName":"Ko"}]
 
-sudo sysctl --system
-```
-### 컨테이너 Runtime 환경 설치
-* 컨테이너 실행환경은 Docker, CRI-O, Containered 로 구성가능한데 Docker는 1.24 이후 제외예정이라 CRI-O 설치로 구성
-```text
-OS=CentOS_7
-VERSION=1.24
-curl -L -o /etc/yum.repos.d/devel:kubic:libcontainers:stable.repo https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/$OS/devel:kubic:libcontainers:stable.repo
-curl -L -o /etc/yum.repos.d/devel:kubic:libcontainers:stable:cri-o:$VERSION.repo https://download.opensuse.org/repositories/devel:kubic:libcontainers:stable:cri-o:$VERSION/$OS/devel:kubic:libcontainers:stable:cri-o:$VERSION.repo
 
-# Update CRI-O Subnet
-sed -i 's/10.85.0.0/192.168.0.0/g' /etc/cni/net.d/100-crio-bridge.conf
+# PV/PVC 생성
+kubectl create -f springboot-demo-pv.yaml
+kubectl create -f springboot-demo-pvc.yaml
 
-# Start and enable Service
-systemctl daemon-reload
-systemctl start crio
-systemctl enable crio
-```
-### /etc/host 등록
-```text
-10.65.41.81 wspark-kube-mas01
-10.65.41.84 wspark-kube-worker01
-10.65.41.85 wspark-kube-worker02
-```
-## Master Nodes 
+# deployment에 volume 추가(/logs 디렉토리에 springboot-demo-pvc 연결)
+kubectl edit deploy springboot-sample -n wspark
 
-### kubectl enable
-```text
-systemctl enable kubelet
-systemctl start kubelet
-```
-### kubernetes 컨테이너 이미지 Pull
-```
-kubeadm config images pull
-[config/images] Pulled k8s.gcr.io/kube-apiserver:v1.24.2
-[config/images] Pulled k8s.gcr.io/kube-controller-manager:v1.24.2
-[config/images] Pulled k8s.gcr.io/kube-scheduler:v1.24.2
-[config/images] Pulled k8s.gcr.io/kube-proxy:v1.24.2
-[config/images] Pulled k8s.gcr.io/pause:3.7
-[config/images] Pulled k8s.gcr.io/etcd:3.5.3-0
-[config/images] Pulled k8s.gcr.io/coredns/coredns:v1.8.6
+    spec:
+      containers:
+      - image: docker.io/wspark83/springboot:demo-v1.8
+        imagePullPolicy: IfNotPresent
+        name: springboot
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /logs
+          name: springboot-demo-pvc
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: springboot-demo-pvc
+        persistentVolumeClaim:
+          claimName: springboot-demo-pvc
+
+
+# pod에서 pvc 확인
+# pod name 확인 및 pod 내부진입
+kubectl get pods -n wspark
+NAME                               READY   STATUS    RESTARTS   AGE
+springboot-demo-6bd844df67-99bj2   1/1     Running   0          12m
+springboot-demo-6bd844df67-xhjp7   1/1     Running   0          12m
+kubectl exec -ti springboot-demo-6bd844df67-99bj2 /bin/bash -n wspark
+
+# pod 내에서 볼륨정보 추가확인(/logs)
+df -h
+Filesystem                                      Size  Used Avail Use% Mounted on
+overlay                                          32G   12G   20G  37% /
+tmpfs                                            64M     0   64M   0% /dev
+tmpfs                                           3.9G     0  3.9G   0% /sys/fs/cgroup
+shm                                              64M     0   64M   0% /dev/shm
+tmpfs                                           3.9G  410M  3.5G  11% /etc/hostname
+10.65.41.80:/data/nfs/wspark/springboot-sample  100G  2.0G   99G   2% /logs
+/dev/mapper/centos-root                          32G   12G   20G  37% /etc/hosts
+tmpfs                                           7.7G   12K  7.7G   1% /run/secrets/kubernetes.io/serviceaccount
+tmpfs                                           3.9G     0  3.9G   0% /proc/acpi
+tmpfs                                           3.9G     0  3.9G   0% /proc/scsi
+tmpfs                                           3.9G     0  3.9G   0% /sys/firmware
 
 ```
 
-### cluster 생성
-```text
-kubeadm init --pod-network-cidr=192.168.0.0/16 --upload-certs --control-plane-endpoint=wspark-kube-mas01
+## autoscale 설정
 ```
+# hpa 설정으로 cpu, mem 임계치를 초과할 경우 자동확장 기능사용
+kubectl create -f hpa.yaml -n wspark
+horizontalpodautoscaler.autoscaling/hpa created
+kubectl get hpa -n wspark
+NAME   REFERENCE                    TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
+hpa    Deployment/springboot-demo   1%/60%    1         3         3          21s
 
-### kubeconfig 복사
-```text
-mkdir -p $HOME/.kube
-cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
-chown $(id -u):$(id -g) $HOME/.kube/config
-```
-### master node join
-```text
- kubeadm join wspark-kube-mas01:6443 --token uoha55.g7mswz8z2n94sosk .--discovery-token-ca-cert-hash sha256:b186bd08e160d4cabf959091b7c1f6be3ff623986f9e7bea852938cd10fb00f0
-  --control-plane 
-```
+# project limits 추가
+kubectl create -f limits.yaml -n wspark
+limitrange/limit-range created
+kubectl get limits -n wspark
+NAME          CREATED AT
+limit-range   2022-07-22T02:33:57Z
 
-## Worker Node 생성
+# project quota 추가
+kubectl create -f quota.yaml -n wspark
+resourcequota/quota created
+kubectl get quota -n wspark
+NAME    AGE   REQUEST                                            LIMIT
+quota   9s    requests.cpu: 600m/4, requests.memory: 768Mi/4Gi   limits.cpu: 6/8, limits.memory: 1536Mi/8Gi
 
-### worekr노드 join
-```text
-# wspark-kube-worker01
- kubeadm join wspark-kube-mas01:6443 --token uoha55.g7mswz8z2n94sosk .--discovery-token-ca-cert-hash sha256:b186bd08e160d4cabf959091b7c1f6be3ff623986f9e7bea852938cd10fb00f0
-# wspark-kube-worker02
- kubeadm join wspark-kube-mas01:6443 --token uoha55.g7mswz8z2n94sosk .--discovery-token-ca-cert-hash sha256:b186bd08e160d4cabf959091b7c1f6be3ff623986f9e7bea852938cd10fb00f0
-```
+# deployment 에 resources 제한
+kubectl edit deploy -n wspark
+     containers:
+      - image: docker.io/wspark83/springboot:demo-v1.8
+        imagePullPolicy: IfNotPresent
+        name: springboot-demo
+        resources:
+          limits:
+            cpu: "2"
+          requests:
+            cpu: 200m
 
-## netowrk plugin 설치
-```
-kubectl create -f https://docs.projectcalico.org/manifests/tigera-operator.yaml 
-kubectl create -f https://docs.projectcalico.org/manifests/custom-resources.yaml
-```
+# 서비스에 부하주기
+ab -n 1000 -c 1000 http://10.65.41.81:31236/api/library/book
 
-### cluster node 확인
-```
-kubectl get nodes
-NAME                   STATUS   ROLES    AGE    VERSION
-wspark-kube-mas01      Ready    master   4d3h   v1.24.2
-wspark-kube-worker01   Ready    worker   4d3h   v1.24.2
-wspark-kube-worker02   Ready    worker   4d3h   v1.24.2
-```
-
-## Bastion 서버에서 작업
-* 클러스터 구성 후 Bastion 서버에서 클러스터 작업을 위한 패키지 설치
-```
-yum install kubelet -y
-
-# k8s config 파일 복사
-cp wspark-kube-mas01:/root/.kube/config /root/.kube/config
-
-# Node 확인
-kubectl get nodes
-NAME                   STATUS    AGE
-wspark-kube-mas01      Ready     4d
-wspark-kube-worker01   Ready     4d
-wspark-kube-worker02   Ready     4d
-[root@bastion git]# 
+# 부하시 hpa개수 max까지 증가
+ kubectl get hpa -n wspark
+NAME   REFERENCE                    TARGETS    MINPODS   MAXPODS   REPLICAS   AGE
+hpa    Deployment/springboot-demo   424%/60%   1         3         3          7m4s
+[root@wspark-kube-mas01 ~]# 
 
 ```
 
 ## Reference 참고 링크
-* [kubernetes install](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/)
-* [install blog](https://computingforgeeks.com/install-kubernetes-cluster-on-centos-with-kubeadm/)
+* [kubernetes] (https://kubernetes.io/)
+* [kubernetes autoscale] (https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale-walkthrough/#autoscaling-on-more-specific-metrics)
